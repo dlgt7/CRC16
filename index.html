@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Modbus RTU CRC-16 计算工具</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    margin: 0;
+    padding: 20px;
+    color: #333;
+  }
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.1);
+    overflow: hidden;
+  }
+  header {
+    background: #0055a5;
+    color: white;
+    padding: 20px;
+    text-align: center;
+  }
+  header h1 { margin: 0; font-size: 28px; }
+  header p { margin: 8px 0 0; opacity: 0.9; }
+  main { padding: 30px; }
+  .input-area {
+    margin-bottom: 30px;
+  }
+  label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+  }
+  textarea {
+    width: 100%;
+    height: 120px;
+    padding: 12px;
+    font-family: "Courier New", monospace;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    resize: vertical;
+    box-sizing: border-box;
+  }
+  .buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 15px;
+  }
+  button {
+    padding: 10px 20px;
+    font-size: 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    background: #0055a5;
+    color: white;
+    transition: background 0.3s;
+  }
+  button:hover { background: #003f7f; }
+  button.clear { background: #e74c3c; }
+  button.clear:hover { background: #c0392b; }
+  button.copy { background: #27ae60; }
+  button.copy:hover { background: #219653; }
+  .result {
+    margin-top: 30px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 5px solid #0055a5;
+  }
+  .result h3 { margin-top: 0; }
+  .example {
+    margin-top: 30px;
+  }
+  .example-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+  }
+  .example-item {
+    background: #f1f3f5;
+    padding: 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .example-item:hover { background: #e9ecef; }
+  .example-item code { font-size: 14px; }
+  .footer {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+    font-size: 14px;
+    background: #f8f9fa;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Modbus RTU CRC-16 计算工具</h1>
+    <p>标准 Modbus 协议（多项式 0xA001，初始值 0xFFFF，低字节在前）</p>
+  </header>
+
+  <main>
+    <div class="input-area">
+      <label for="input">输入十六进制数据（支持空格、逗号、换行）</label>
+      <textarea id="input" placeholder="例如：01 03 00 00 00 01&#10;或 010300000001"></textarea>
+
+      <div class="buttons">
+        <button onclick="calculate()">计算 CRC</button>
+        <button class="clear" onclick="clearInput()">清空</button>
+        <button class="copy" onclick="copyFullFrame()">复制完整帧</button>
+        <button onclick="copyCRC()">复制 CRC</button>
+      </div>
+    </div>
+
+    <div class="result" id="result" style="display:none;">
+      <h3>计算结果</h3>
+      <p><strong>原始数据（HEX）：</strong><span id="raw"></span></p>
+      <p><strong>CRC-16（低字节在前）：</strong><span id="crc"></span></p>
+      <p><strong>完整 RTU 帧（HEX）：</strong><span id="full"></span></p>
+    </div>
+
+    <div class="example">
+      <h3>常用示例（点击直接填入）</h3>
+      <div class="example-grid">
+        <div class="example-item" onclick="fill('01 03 00 00 00 01')">
+          01 03 00 00 00 01<br><code>功能码03 读取1个保持寄存器</code>
+        </div>
+        <div class="example-item" onclick="fill('01 06 00 01 00 0A')">
+          01 06 00 01 00 0A<br><code>功能码06 写入单个寄存器</code>
+        </div>
+        <div class="example-item" onclick="fill('01 10 00 00 00 02 04 00 00 00 01')">
+          01 10 00 00 00 02 04 00 00 00 01<br><code>功能码16 连续写入2个寄存器</code>
+        </div>
+        <div class="example-item" onclick="fill('01 04 00 00 00 0A')">
+          01 04 00 00 00 0A<br><code>功能码04 读取10个输入寄存器</code>
+        </div>
+        <div class="example-item" onclick="fill('05 05 00 00 FF 00')">
+          05 05 00 00 FF 00<br><code>功能码05 强制线圈开</code>
+        </div>
+        <div class="example-item" onclick="fill('01 03 00 00 00 06')">
+          01 03 00 00 00 06<br><code>读取6个寄存器</code>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="footer">
+    完全符合 Modbus 官方规范 & Siemens 等设备标准 • 2025
+  </div>
+</div>
+
+<script>
+function hexToBytes(hexStr) {
+  hexStr = hexStr.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+  if (hexStr.length % 2 !== 0) {
+    alert('十六进制数据长度必须为偶数！');
+    return null;
+  }
+  const bytes = [];
+  for (let i = 0; i < hexStr.length; i += 2) {
+    bytes.push(parseInt(hexStr.substr(i, 2), 16));
+  }
+  return bytes;
+}
+
+function modbusCrc16(data) {
+  let crc = 0xFFFF;
+  for (let byte of data) {
+    crc ^= byte;
+    for (let i = 0; i < 8; i++) {
+      if (crc & 0x0001) {
+        crc = (crc >> 1) ^ 0xA001;
+      } else {
+        crc >>= 1;
+      }
+    }
+  }
+  // 低字节在前
+  return [(crc & 0xFF), ((crc >> 8) & 0xFF)];
+}
+
+function formatHex(bytes) {
+  return bytes.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+}
+
+function calculate() {
+  const input = document.getElementById('input').value.trim();
+  if (!input) return alert('请输入数据');
+
+  const bytes = hexToBytes(input);
+  if (!bytes) return;
+
+  const crc = modbusCrc16(bytes);
+  const fullFrame = [...bytes, ...crc];
+
+  document.getElementById('raw').textContent = formatHex(bytes);
+  document.getElementById('crc').textContent = formatHex(crc);
+  document.getElementById('full').textContent = formatHex(fullFrame);
+  document.getElementById('result').style.display = 'block';
+}
+
+function clearInput() {
+  document.getElementById('input').value = '';
+  document.getElementById('result').style.display = 'none';
+}
+
+function fill(example) {
+  document.getElementById('input').value = example;
+  calculate();
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    alert('已复制到剪贴板！');
+  });
+}
+
+function copyFullFrame() {
+  const full = document.getElementById('full').textContent;
+  if (full) copyText(full);
+}
+
+function copyCRC() {
+  const crc = document.getElementById('crc').textContent;
+  if (crc) copyText(crc);
+}
+</script>
+</body>
+</html>
